@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Temporal Sandbox Launcher</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #0b1220;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #8b5cf6;
+    --accent-hover: #7c3aed;
+    --success: #10b981;
+    --error: #ef4444;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 12px;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .container {
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  header { margin-bottom: 10px; display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .subtitle { color: var(--muted); margin: 0; font-size: 12px; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .actions .spacer { flex: 1; }
+
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  button:hover:not(:disabled) { background: var(--accent-hover); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  button.secondary:hover:not(:disabled) { background: var(--panel-2); }
+
+  .status { color: var(--muted); font-size: 12px; }
+  .status.active { color: var(--accent); }
+  .status.success { color: var(--success); }
+  .status.error { color: var(--error); }
+
+  .mono { font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; }
+
+  pre.log {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 0;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  pre.log:empty::before {
+    content: "Logs will appear here once you launch...";
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  a.ui-link { color: var(--accent); text-decoration: none; font-weight: 500; font-size: 12px; }
+  a.ui-link:hover { text-decoration: underline; }
+
+  /* split layout: toolbar+editor stacked on the left, log on the right */
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+  }
+  .split > .card,
+  .split > .left-col > .card,
+  .split > .right-col { margin-bottom: 0; display: flex; flex-direction: column; min-height: 0; }
+  .left-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+  .left-col > .card:last-child { flex: 1; min-height: 0; }
+  .right-col { min-width: 0; }
+  .pane-title {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; }
+  }
+
+  .editor-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .editor-tab {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 5px 10px;
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    border-radius: 0;
+  }
+  .editor-tab:hover:not(.active) { color: var(--text); }
+  .editor-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+  .editor-tab.dirty::after {
+    content: "●";
+    color: var(--accent);
+    margin-left: 5px;
+    font-size: 9px;
+  }
+  /* CodeMirror editor host */
+  .editor-host {
+    flex: 1;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--panel-2);
+  }
+  .editor-host .cm-editor {
+    height: 100%;
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+  }
+  .editor-host .cm-editor.cm-focused { outline: none; border-color: var(--accent); }
+  .editor-host .cm-scroller { font-family: inherit; }
+
+  /* Log line color coding */
+  .log-line { display: block; }
+  .log-line.error { color: var(--error); }
+  .log-line.success { color: var(--success); }
+  .log-line.image { color: var(--muted); }
+  .log-line.workflow { color: var(--accent); }
+  .log-line.indent { color: var(--text); padding-left: 12px; }
+  .editor-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Temporal Sandbox Launcher</h1>
+    <span class="subtitle">Edit · Run · Iterate on Temporal workflows</span>
+  </header>
+
+  <div class="split">
+    <div class="left-col">
+      <div class="card">
+        <div class="actions">
+          <button id="runBtn">Run</button>
+          <button id="stopBtn" class="secondary" disabled>Stop</button>
+          <a id="uiLink" class="ui-link" target="_blank" rel="noopener" style="display: none;"></a>
+          <span class="spacer"></span>
+          <span id="runStatus" class="status">Ready</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="pane-title">Source code</h3>
+        <div id="editorTabs" class="editor-tabs"></div>
+        <div id="editorHost" class="editor-host"></div>
+      </div>
+    </div>
+    <div class="card right-col">
+      <h3 class="pane-title">Activity log</h3>
+      <pre id="log" class="log"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { EditorView, basicSetup } from "https://esm.sh/codemirror@6.0.1";
+import { javascript } from "https://esm.sh/@codemirror/lang-javascript@6.2.2";
+import { oneDark } from "https://esm.sh/@codemirror/theme-one-dark@6.1.2";
+
+const stopBtn = document.getElementById("stopBtn");
+const logEl = document.getElementById("log");
+const uiLink = document.getElementById("uiLink");
+
+let currentSandboxId = null;
+
+function classifyLog(line) {
+  if (line.startsWith("ERROR:") || line.startsWith("✗") || line.includes("failed")) return "error";
+  if (line.startsWith("✓") || line.endsWith("ready") || line.startsWith("Sandbox created")) return "success";
+  if (line.startsWith("[image]")) return "image";
+  if (line.startsWith("Temporal UI:") || line.startsWith("Workflow output")) return "workflow";
+  if (line.startsWith("  ")) return "indent";
+  return "";
+}
+
+function appendLog(line) {
+  const el = document.createElement("span");
+  el.className = "log-line";
+  const cls = classifyLog(line);
+  if (cls) el.classList.add(cls);
+  el.textContent = line;
+  logEl.appendChild(el);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function clearLog() {
+  while (logEl.firstChild) logEl.removeChild(logEl.firstChild);
+}
+
+async function streamSse(resp, handlers) {
+  if (!resp.ok || !resp.body) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(text || `HTTP ${resp.status}`);
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) !== -1) {
+      const frame = buf.slice(0, idx).trim();
+      buf = buf.slice(idx + 2);
+      if (!frame.startsWith("data:")) continue;
+      const { kind, payload } = JSON.parse(frame.slice(5).trim());
+      handlers[kind]?.(payload);
+    }
+  }
+}
+
+// ---- Source-code editor (CodeMirror 6 with TypeScript highlighting) ----
+const editorTabs = document.getElementById("editorTabs");
+const editorHost = document.getElementById("editorHost");
+const runBtn = document.getElementById("runBtn");
+const runStatus = document.getElementById("runStatus");
+
+const fileBuffers = {};      // filename -> current text in editor
+const fileBaseline = {};     // filename -> last-known-on-server text (for dirty marker)
+let activeFile = null;
+const tabButtons = {};
+
+const updateListener = EditorView.updateListener.of((u) => {
+  if (!u.docChanged || !activeFile) return;
+  fileBuffers[activeFile] = u.state.doc.toString();
+  refreshDirtyMarkers();
+});
+
+const editorView = new EditorView({
+  doc: "",
+  extensions: [
+    basicSetup,
+    javascript({ typescript: true }),
+    oneDark,
+    EditorView.theme({ "&": { height: "100%" } }),
+    updateListener,
+  ],
+  parent: editorHost,
+});
+
+function setEditorContent(text) {
+  editorView.dispatch({
+    changes: { from: 0, to: editorView.state.doc.length, insert: text },
+  });
+}
+
+function setRunStatus(text, kind = "") {
+  runStatus.textContent = text;
+  runStatus.className = "status" + (kind ? " " + kind : "");
+}
+
+function refreshDirtyMarkers() {
+  for (const [name, btn] of Object.entries(tabButtons)) {
+    btn.classList.toggle("dirty", fileBuffers[name] !== fileBaseline[name]);
+  }
+}
+
+function selectFile(name) {
+  // flush in-flight edits to the previous buffer before swapping
+  if (activeFile) {
+    fileBuffers[activeFile] = editorView.state.doc.toString();
+    if (tabButtons[activeFile]) tabButtons[activeFile].classList.remove("active");
+  }
+  activeFile = name;
+  tabButtons[name].classList.add("active");
+  setEditorContent(fileBuffers[name]);
+}
+
+async function loadFiles() {
+  try {
+    const r = await fetch("/api/files");
+    if (!r.ok) throw new Error(await r.text());
+    const files = await r.json();
+    for (const [name, content] of Object.entries(files)) {
+      fileBuffers[name] = content;
+      fileBaseline[name] = content;
+      const btn = document.createElement("button");
+      btn.className = "editor-tab";
+      btn.textContent = name;
+      btn.addEventListener("click", () => selectFile(name));
+      editorTabs.appendChild(btn);
+      tabButtons[name] = btn;
+      if (!activeFile) selectFile(name);
+    }
+  } catch (e) {
+    setRunStatus("Failed to load files: " + e.message, "error");
+  }
+}
+loadFiles();
+
+runBtn.addEventListener("click", async () => {
+  runBtn.disabled = true;
+  if (!currentSandboxId) {
+    clearLog();
+    uiLink.style.display = "none";
+  }
+  setRunStatus("Running…", "active");
+
+  try {
+    const handlers = {
+      log: (msg) => appendLog(msg),
+      ui: (info) => {
+        currentSandboxId = info.sandboxId;
+        uiLink.href = info.uiUrl;
+        uiLink.textContent = "Open Temporal UI ↗";
+        uiLink.style.display = "";
+        stopBtn.disabled = false;
+      },
+      result: () => {
+        for (const name of Object.keys(fileBuffers)) fileBaseline[name] = fileBuffers[name];
+        refreshDirtyMarkers();
+        setRunStatus("Done", "success");
+      },
+      error: (msg) => {
+        appendLog("ERROR: " + msg);
+        setRunStatus("Failed", "error");
+      },
+    };
+
+    const resp = await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sandboxId: currentSandboxId ?? undefined,
+        files: fileBuffers,
+      }),
+    });
+    await streamSse(resp, handlers);
+  } catch (e) {
+    appendLog("Run failed: " + e.message);
+    setRunStatus("Failed", "error");
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+
+stopBtn.addEventListener("click", async () => {
+  if (!currentSandboxId) return;
+  stopBtn.disabled = true;
+  setRunStatus("Stopping…", "active");
+  try {
+    const r = await fetch("/api/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sandboxId: currentSandboxId }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    appendLog(`Sandbox ${currentSandboxId} deleted.`);
+    uiLink.style.display = "none";
+    currentSandboxId = null;
+    setRunStatus("Ready");
+  } catch (e) {
+    appendLog("Stop failed: " + e.message);
+    setRunStatus("Stop failed", "error");
+    stopBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

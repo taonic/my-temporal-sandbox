@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.daytona.io)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/python -c \"from daytona import Daytona, DaytonaConfig, SessionExecuteRequest; print\\('imports ok'\\)\")",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8765 --log-level warning)",
+      "Bash(curl -sS -o /dev/null -w \"GET /        -> %{http_code}\\\\n\" http://127.0.0.1:8765/)",
+      "Bash(curl -sS -o /dev/null -w \"GET /api/stop \\(wrong-method\\) -> %{http_code}\\\\n\" http://127.0.0.1:8765/api/stop)",
+      "Read(//Users/tao/dotfiles/**)",
+      "Bash(curl -sS -o /tmp/index.html -w \"GET /        -> %{http_code} \\(%{size_download} bytes\\)\\\\n\" http://127.0.0.1:8765/)",
+      "Read(//tmp/**)",
+      "Bash(uv --version)",
+      "Bash(uv sync *)",
+      "Bash(curl -sS -o /dev/null -w \"GET / -> %{http_code} \\(%{size_download} bytes\\)\\\\n\" http://127.0.0.1:8765/)",
+      "Bash(npm view *)",
+      "Bash(node -e \"const m=require\\('@daytonaio/sdk'\\); console.log\\(Object.keys\\(m\\).sort\\(\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

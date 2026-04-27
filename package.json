@@ -1,0 +1,22 @@
+{
+  "name": "temporal-sandbox-launcher",
+  "version": "0.1.0",
+  "description": "Daytona-backed launcher for a Temporal dev sandbox running a hello-world workflow.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@daytonaio/sdk": "^0.169.0",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
