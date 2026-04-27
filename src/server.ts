@@ -111,6 +111,7 @@ app.post("/api/run", async (req: Request, res: Response) => {
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
-  console.log(`Temporal sandbox launcher listening on http://127.0.0.1:${PORT}`);
+const HOST = process.env.HOST ?? "127.0.0.1";
+app.listen(PORT, HOST, () => {
+  console.log(`Temporal sandbox launcher listening on http://${HOST}:${PORT}`);
 });

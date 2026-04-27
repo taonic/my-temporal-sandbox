@@ -24,6 +24,24 @@ Open <http://localhost:8000>, edit the source if you want, and click
 **Run**. The activity log streams progress; when the dev server is
 healthy, an **Open Temporal UI ↗** link appears in the toolbar.
 
+## Deploy to Fly.io
+
+A [`Dockerfile`](Dockerfile) and [`fly.toml`](fly.toml) are included.
+
+```bash
+# 1. (first time) pick an unused app name in fly.toml, then:
+fly launch --copy-config --no-deploy
+fly secrets set DAYTONA_KEY=dtn_...
+
+# 2. deploy
+fly deploy
+```
+
+The container runs `npx tsx src/server.ts` on port 8000 bound to
+`0.0.0.0`; Fly's proxy terminates HTTPS in front. Machines auto-stop
+when idle and auto-start on the next request, so a personal-use
+deployment is essentially free.
+
 ## How it works
 
 The launcher uses Daytona's declarative `Image` API to build a custom

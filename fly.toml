@@ -1,0 +1,33 @@
+# See https://fly.io/docs/reference/configuration/ for full documentation.
+# Rename `app` to a name you own before running `fly launch` / `fly deploy`.
+
+app = "temporal-sandbox"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  HOST = "0.0.0.0"
+
+# DAYTONA_KEY is set as a Fly secret, not in this file:
+#   fly secrets set DAYTONA_KEY=dtn_...
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Save cost: scale to zero when idle, wake on request.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 25
+    hard_limit = 50
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
