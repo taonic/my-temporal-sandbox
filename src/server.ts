@@ -78,6 +78,27 @@ app.get("/api/files", async (_req: Request, res: Response) => {
   }
 });
 
+app.post("/api/prelaunch", async (_req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const send = (kind: string, payload: unknown) => {
+    res.write(`data: ${JSON.stringify({ kind, payload })}\n\n`);
+  };
+  const log = (msg: string) => send("log", msg);
+
+  try {
+    await manager.prelaunch(log, (ui) => send("ui", ui));
+  } catch (err) {
+    send("error", (err as Error).message);
+  } finally {
+    send("done", null);
+    res.end();
+  }
+});
+
 app.post("/api/run", async (req: Request, res: Response) => {
   const { sandboxId, files } = req.body as {
     sandboxId?: string;

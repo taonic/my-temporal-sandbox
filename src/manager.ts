@@ -89,7 +89,45 @@ export class SandboxManager {
     onUiReady?: (info: UiInfo) => void,
     files?: Record<string, string>,
   ): Promise<LaunchResult> {
-    log("Creating Daytona sandbox (image build is cached after first run)...");
+    const { sandbox, uiInfo } = await this.createAndWarm(log, onUiReady, files);
+    try {
+      const workflowResult = await this.startWorkerAndRunStarter(sandbox, log);
+      return { ...uiInfo, workflowResult };
+    } catch (err) {
+      log(`Launch failed: ${(err as Error).message}. Cleaning up sandbox...`);
+      try {
+        await sandbox.delete();
+      } catch (cleanupErr) {
+        log(`Cleanup error (ignored): ${(cleanupErr as Error).message}`);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Provision a sandbox and bring the Temporal dev server up, but stop short
+   * of running the workflow. Used to preheat a sandbox at page-load time so
+   * the user's first Run is fast.
+   */
+  async prelaunch(
+    log: Logger,
+    onUiReady: (info: UiInfo) => void,
+  ): Promise<UiInfo> {
+    const { uiInfo } = await this.createAndWarm(log, onUiReady);
+    return uiInfo;
+  }
+
+  /**
+   * Create a sandbox, start the Temporal dev server, upload seed source
+   * files, and emit the signed preview URL. Returns the live sandbox so the
+   * caller can run a workflow on it (or just hold it warm).
+   */
+  private async createAndWarm(
+    log: Logger,
+    onUiReady?: (info: UiInfo) => void,
+    files?: Record<string, string>,
+  ): Promise<{ sandbox: Sandbox; uiInfo: UiInfo }> {
+    log("Bootstrapping your sandbox...");
     const sandbox = await this.daytona.create(
       {
         image: sandboxImage,
@@ -106,48 +144,48 @@ export class SandboxManager {
       },
     );
     const sandboxId = sandbox.id;
-    log(`Sandbox created: ${sandboxId}`);
 
     try {
-      log("Uploading workflow source files...");
-      for (const filename of SOURCE_FILES) {
-        const inMemory = files?.[filename];
-        const buf =
-          inMemory !== undefined
-            ? Buffer.from(inMemory.replace(/\r\n/g, "\n"))
-            : await fs.readFile(path.join(SANDBOX_FILES_DIR, filename));
-        await sandbox.fs.uploadFile(buf, `${APP_DIR}/${filename}`);
-      }
+      // Kick off the dev server immediately and overlap its startup with the
+      // file uploads — both are independent and together they're the slowest
+      // pre-workflow steps.
+      const temporalReady = (async () => {
+        await sandbox.process.createSession("temporal-server");
+        const startResp = await sandbox.process.executeSessionCommand(
+          "temporal-server",
+          {
+            command: `${TEMPORAL_BIN} server start-dev --ip 0.0.0.0 --ui-ip 0.0.0.0 --log-level warn`,
+            runAsync: true,
+          },
+        );
+        await this.waitForTemporal(sandbox, "temporal-server", startResp.cmdId, log);
+      })();
 
-      log("Starting Temporal dev server...");
-      await sandbox.process.createSession("temporal-server");
-      const startResp = await sandbox.process.executeSessionCommand(
-        "temporal-server",
-        {
-          command: `${TEMPORAL_BIN} server start-dev --ip 0.0.0.0 --ui-ip 0.0.0.0 --log-level warn`,
-          runAsync: true,
-        },
-      );
-      const serverCmdId = startResp.cmdId;
+      const uploadDone = (async () => {
+        for (const filename of SOURCE_FILES) {
+          const inMemory = files?.[filename];
+          const buf =
+            inMemory !== undefined
+              ? Buffer.from(inMemory.replace(/\r\n/g, "\n"))
+              : await fs.readFile(path.join(SANDBOX_FILES_DIR, filename));
+          await sandbox.fs.uploadFile(buf, `${APP_DIR}/${filename}`);
+        }
+      })();
 
-      log("Waiting for Temporal server to be healthy...");
-      await this.waitForTemporal(sandbox, "temporal-server", serverCmdId, log);
+      await Promise.all([temporalReady, uploadDone]);
 
-      log("Generating Temporal UI preview link...");
       const preview = await sandbox.getSignedPreviewUrl(TEMPORAL_UI_PORT, SIGNED_URL_TTL_SECONDS);
       const uiInfo: UiInfo = {
         sandboxId,
         uiUrl: preview.url,
         uiToken: preview.token,
       };
-      log(`Temporal UI: ${preview.url}`);
+      log("You're all set. Ready to run.");
       onUiReady?.(uiInfo);
 
-      const workflowResult = await this.startWorkerAndRunStarter(sandbox, log);
-
-      return { ...uiInfo, workflowResult };
+      return { sandbox, uiInfo };
     } catch (err) {
-      log(`Launch failed: ${(err as Error).message}. Cleaning up sandbox...`);
+      log(`Sandbox bootstrap failed: ${(err as Error).message}. Cleaning up...`);
       try {
         await sandbox.delete();
       } catch (cleanupErr) {

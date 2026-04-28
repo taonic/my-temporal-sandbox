@@ -216,11 +216,11 @@
     <div class="left-col">
       <div class="card">
         <div class="actions">
-          <button id="runBtn">Run</button>
+          <button id="runBtn" disabled>Run</button>
           <button id="stopBtn" class="secondary" disabled>Stop</button>
           <a id="uiLink" class="ui-link" target="_blank" rel="noopener" style="display: none;"></a>
           <span class="spacer"></span>
-          <span id="runStatus" class="status">Ready</span>
+          <span id="runStatus" class="status">Warming up…</span>
         </div>
       </div>
       <div class="card">
@@ -370,7 +370,39 @@ async function loadFiles() {
     setRunStatus("Failed to load files: " + e.message, "error");
   }
 }
+
+// Pre-warm a sandbox so the user's first Run is fast.
+async function prelaunch() {
+  setRunStatus("Warming up sandbox…", "active");
+  try {
+    const handlers = {
+      log: (msg) => appendLog(msg),
+      ui: (info) => {
+        currentSandboxId = info.sandboxId;
+        uiLink.href = info.uiUrl;
+        uiLink.textContent = "Open Temporal UI ↗";
+        uiLink.style.display = "";
+        stopBtn.disabled = false;
+        runBtn.disabled = false;
+        setRunStatus("Ready (warm sandbox)", "success");
+      },
+      error: (msg) => {
+        appendLog("ERROR: " + msg);
+        runBtn.disabled = false;
+        setRunStatus("Warmup failed — click Run for cold start", "error");
+      },
+    };
+    const resp = await fetch("/api/prelaunch", { method: "POST" });
+    await streamSse(resp, handlers);
+  } catch (e) {
+    appendLog("Prelaunch failed: " + e.message);
+    runBtn.disabled = false;
+    setRunStatus("Cold start", "error");
+  }
+}
+
 loadFiles();
+prelaunch();
 
 runBtn.addEventListener("click", async () => {
   runBtn.disabled = true;
