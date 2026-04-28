@@ -1,7 +1,7 @@
 # See https://fly.io/docs/reference/configuration/ for full documentation.
 # Rename `app` to a name you own before running `fly launch` / `fly deploy`.
 
-app = "temporal-sandbox"
+app = "my-temporal-sandbox"
 primary_region = "iad"
 
 [build]

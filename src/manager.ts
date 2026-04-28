@@ -180,7 +180,7 @@ export class SandboxManager {
         uiUrl: preview.url,
         uiToken: preview.token,
       };
-      log("You're all set. Ready to run.");
+      log("You're all set. Ready to run?");
       onUiReady?.(uiInfo);
 
       return { sandbox, uiInfo };
@@ -227,7 +227,6 @@ export class SandboxManager {
     let sandbox: Sandbox | null = null;
     if (maybeSandboxId) {
       try {
-        log("Resolving sandbox...");
         sandbox = await this.daytona.get(maybeSandboxId);
       } catch {
         log(`Sandbox ${maybeSandboxId} is gone; launching a fresh one...`);
@@ -247,7 +246,6 @@ export class SandboxManager {
       uiToken: preview.token,
     });
 
-    log("Uploading edits to sandbox...");
     for (const filename of SOURCE_FILES) {
       const incoming = files[filename];
       if (incoming === undefined) continue;
@@ -267,7 +265,6 @@ export class SandboxManager {
     opts: { restartWorker?: boolean } = {},
   ): Promise<string> {
     if (opts.restartWorker) {
-      log("Stopping previous worker...");
       // pkill makes sure the worker process tree is gone before we recreate
       // the session — deleteSession alone isn't documented to kill children.
       await sandbox.process.executeCommand(

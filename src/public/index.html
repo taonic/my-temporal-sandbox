@@ -256,6 +256,30 @@ function classifyLog(line) {
   return "";
 }
 
+let bootstrapSpinner = null;
+
+function startBootstrapSpinner(el, base) {
+  stopBootstrapSpinner();
+  const frames = ["|", "/", "-", "\\"];
+  let i = 0;
+  bootstrapSpinner = {
+    el,
+    base,
+    timer: setInterval(() => {
+      el.textContent = `${base} ${frames[i++ % frames.length]}`;
+    }, 100),
+  };
+}
+
+function stopBootstrapSpinner() {
+  if (!bootstrapSpinner) return;
+  clearInterval(bootstrapSpinner.timer);
+  if (bootstrapSpinner.el.isConnected) {
+    bootstrapSpinner.el.textContent = `${bootstrapSpinner.base} ✓`;
+  }
+  bootstrapSpinner = null;
+}
+
 function appendLog(line) {
   const el = document.createElement("span");
   el.className = "log-line";
@@ -264,9 +288,18 @@ function appendLog(line) {
   el.textContent = line;
   logEl.appendChild(el);
   logEl.scrollTop = logEl.scrollHeight;
+
+  // Animate the bootstrap line with a spinner; the next non-bootstrap log
+  // settles it to a checkmark.
+  if (/^Bootstrapping your sandbox/.test(line)) {
+    startBootstrapSpinner(el, "Bootstrapping your sandbox");
+  } else {
+    stopBootstrapSpinner();
+  }
 }
 
 function clearLog() {
+  stopBootstrapSpinner();
   while (logEl.firstChild) logEl.removeChild(logEl.firstChild);
 }
 
